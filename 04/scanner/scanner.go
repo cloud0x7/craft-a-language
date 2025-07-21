@@ -2,13 +2,13 @@ package scanner
 
 import (
 	"log"
-	"strings"
 )
 
+// 词法分析器
 type Scanner struct {
 	stream   *CharStream
-	tokens   []Token
-	KeyWords map[string]struct{}
+	tokens   []Token             // 存储token的列表
+	KeyWords map[string]struct{} // 关键字
 }
 
 func NewScanner(stream *CharStream) *Scanner {
@@ -28,7 +28,7 @@ func NewScanner(stream *CharStream) *Scanner {
 		"interface", "package", "protected", "static"}
 
 	for _, v := range kw {
-		t.KeyWords[v] = struct{}{}
+		t.KeyWords[v] = struct{}{} // 添加空结构体，模拟集合set
 	}
 
 	return t
@@ -55,6 +55,7 @@ func (t *Scanner) Peek() Token {
 	return tk
 }
 
+// 预读前面第二个token
 func (t *Scanner) Peek2() Token {
 	for len(t.tokens) < 2 {
 		t.tokens = append(t.tokens, t.getAToken())
@@ -63,16 +64,17 @@ func (t *Scanner) Peek2() Token {
 	return t.tokens[1]
 }
 
+// 从字符串流中获取一个新Token
 func (t *Scanner) getAToken() Token {
-	t.skipWhiteSpaces()
+	t.skipWhiteSpaces() // 跳过空白字符
 
-	if t.stream.eof() {
+	if t.stream.eof() { // 到达字符流结尾
 		return Token{Kind: EOF, Text: ""}
 	} else {
 		ch := t.stream.peek()
-		if t.isLetter(ch) || ch == "_" {
+		if t.isLetter(ch) || ch == "_" { // 是字母或数字，则解析标识符
 			return t.parseIdentifer()
-		} else if ch == "\"" {
+		} else if ch == "\"" { // 是双引号，则解析字符串字面量
 			return t.parseStringLIteral()
 		} else if ch == "(" || ch == ")" || ch == "{" || ch == "}" || ch == "[" || ch == "]" ||
 			ch == "," || ch == ";" || ch == ":" || ch == "?" || ch == "@" {
@@ -81,35 +83,35 @@ func (t *Scanner) getAToken() Token {
 		} else if t.isDigit(ch) {
 			t.stream.next()
 			ch1 := t.stream.peek()
-			literal := strings.Builder{}
-			if ch == "0" {
+			literal := ""
+			if ch == "0" { //暂不支持八进制、二进制、十六进制
 				if !(ch >= "1" && ch1 <= "9") {
-					literal.WriteString("0")
+					literal += "0"
 				} else {
 					log.Printf("0 cannot be followed by other digit now, at line: %d, col: %d ", t.stream.line, t.stream.col)
 					t.stream.next()
 					return t.getAToken()
 				}
 			} else if ch >= "1" && ch <= "9" {
-				literal.WriteString(ch)
+				literal += ch
 				for t.isDigit(ch1) {
 					ch = t.stream.next()
-					literal.WriteString(ch)
+					literal += ch
 					ch1 = t.stream.peek()
 				}
 			}
-			if ch1 == "." {
-				literal.WriteString(".")
+			if ch1 == "." { // 小数点
+				literal += "."
 				t.stream.next()
 				ch1 = t.stream.peek()
 				for t.isDigit(ch1) {
 					ch = t.stream.next()
-					literal.WriteString(ch)
+					literal += ch
 					ch1 = t.stream.peek()
 				}
-				return Token{Kind: DecimalLiteral, Text: literal.String()}
+				return Token{Kind: DecimalLiteral, Text: literal}
 			} else {
-				return Token{Kind: IntegerLiteral, Text: literal.String()}
+				return Token{Kind: IntegerLiteral, Text: literal}
 			}
 		} else if ch == "." {
 			t.stream.next()
@@ -357,20 +359,23 @@ func (t *Scanner) parseStringLIteral() Token {
 
 	return token
 }
+
+// 解析标识符。从标识符中还要挑出关键字
 func (t *Scanner) parseIdentifer() Token {
 	token := Token{Kind: Identifier, Text: ""}
+	// 第一个字符不用判断，因为在调用者那里已经判断过了
 	token.Text += t.stream.next()
 
 	for !t.stream.eof() && t.isLetterDigitOrUnderScore(t.stream.peek()) {
 		token.Text += t.stream.next()
 	}
-
+	// 识别关键字
 	if _, ok := t.KeyWords[token.Text]; ok {
 		token.Kind = Keyword
-	}
-
-	if token.Text == "function" {
-		token.Kind = Keyword
+	} else if token.Text == "null" {
+		token.Kind = NullLiteral
+	} else if token.Text == "true" || token.Text == "false" {
+		token.Kind = BooleanLiteral
 	}
 
 	return token

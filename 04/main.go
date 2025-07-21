@@ -11,12 +11,13 @@ import (
 )
 
 func main() {
+	// 传递文件名作参数
 	params := os.Args[1:]
 	if len(params) <= 0 {
 		fmt.Println("Usage: go run main.go FILENAME")
 		return
 	}
-
+	// 读取文件内容
 	program, err := os.ReadFile(params[0])
 	if err != nil {
 		fmt.Println(err)
@@ -29,64 +30,68 @@ func main() {
 	// 词法分析
 	fmt.Println("词法分析结果:")
 	tokenizer := scanner.NewScanner(scanner.NewCharStream(string(program)))
-
+	// 打印所有token
 	for tokenizer.Peek().Kind != scanner.EOF {
 		fmt.Printf("%+v\n", tokenizer.Next())
 	}
-
+	// 重新定位到第一个token
 	tokenizer = scanner.NewScanner(scanner.NewCharStream(string(program)))
 
-	// 语法分析
+	// 语法分析，prog是抽象语法树AST
 	fmt.Println("语法分析后的AST:")
 	prog := parser.NewParser(tokenizer).ParseProg()
 	prog.Dump("")
 
+	// 语义分析，新增了符号表
 	symTable := semantic.NewSymTable()
 	enter := semantic.NewEnter(symTable)
 	enter.Visit(prog)
-
+	// 打印符号表
 	fmt.Printf("symTable: %+v\n", symTable)
-
+	// 引用消解
 	refResolver := semantic.NewRefResolver(symTable)
 	refResolver.Visit(prog)
 
 	fmt.Println("语义分析后的AST，注意变量和函数已被消解:")
 	prog.Dump("")
-
+	// 运行程序，通过访问者模式
 	fmt.Println("运行当前的程序:")
 	intp := NewIntepretor()
 	retVal := intp.Visit(prog)
 
-	// fmt.Printf("intp %T, %+v\n", intp, intp)
 	fmt.Printf("程序返回值:%d\n", retVal)
 }
 
+// ///////////////////////////////////////////////////////////////////////
+// 解释器
 type Interpretor struct {
 	ast.AstVisitor
-	values map[string]any
+	values map[string]any // 存储变量值
 }
 
 func NewIntepretor() Interpretor {
 	return Interpretor{values: map[string]any{}}
 }
 func (intp *Interpretor) Visit(node ast.AstNode) any {
-	// fmt.Printf("-node: %T, %+v\n", node, node)
 	return node.Accept(intp)
 }
 func (intp *Interpretor) VisitProg(prog *ast.Prog) any {
 	var retVal any
 	for _, x := range prog.Stmts {
-		// fmt.Printf("--stmt: %T, %+v\n", x, x)
 		retVal = intp.Visit(x)
 	}
 	return retVal
 }
+
+// 函数声明不做任何事情
 func (intp *Interpretor) VisitFunctionDecl(functionDecl *ast.FunctionDecl) any {
 	return nil
 }
+
+// 运行函数调用
 func (intp *Interpretor) VisitFunctionCall(functionCall *ast.FunctionCall) any {
 	if functionCall.Name == "println" {
-		if len(functionCall.Parameters) > 0 {
+		if len(functionCall.Parameters) > 0 { // 内置函数
 			retVal := intp.Visit(functionCall.Parameters[0])
 			if v, ok := retVal.(*LeftValue); ok {
 				retVal = intp.getVariableValue(v.variable.Name)
@@ -95,23 +100,25 @@ func (intp *Interpretor) VisitFunctionCall(functionCall *ast.FunctionCall) any {
 			return 0
 		}
 	} else {
-		if functionCall.Decl != nil {
+		if functionCall.Decl != nil { // 找到函数定义，继续遍历函数体
 			intp.VisitBlock(functionCall.Decl.Body)
 		}
 	}
 	return 0
 }
 func (intp *Interpretor) VisitBlock(block *ast.Block) any {
-	var retVal interface{}
+	var retVal any
 	for _, x := range block.Stmts {
 		retVal = intp.Visit(x)
 	}
 	return retVal
 }
+
+// 如果存在变量初始化部分，要存下变量值
 func (intp *Interpretor) VisitVariableDecl(variableDecl *ast.VariableDecl) any {
 	if variableDecl.Init != nil {
 		v := intp.Visit(variableDecl.Init)
-		if intp.isLeftValue(v) {
+		if intp.isLeftValue(v) { // 是左值，再查一下变量值
 			v = intp.getVariableValue(v.(LeftValue).variable.Name)
 		}
 		intp.setVariableValue(variableDecl.Name, v)
@@ -119,20 +126,28 @@ func (intp *Interpretor) VisitVariableDecl(variableDecl *ast.VariableDecl) any {
 	}
 	return nil
 }
+
+// 访问变量
 func (intp *Interpretor) VisitVariable(v *ast.Variable) any {
 	return NewLeftValue(v)
 }
 func (intp *Interpretor) VisitExpressionStatement(stmt *ast.ExpressionStatement) any {
 	return intp.Visit(stmt.Exp)
 }
+
+// 获取变量值
 func (intp *Interpretor) getVariableValue(varName string) any {
 	ret := intp.values[varName]
 	return ret
 }
+
+// 设置变量值
 func (intp *Interpretor) setVariableValue(varName string, value any) any {
 	intp.values[varName] = value
 	return nil
 }
+
+// 判断是否为左值
 func (intp *Interpretor) isLeftValue(v any) bool {
 	_, ok := v.(*LeftValue)
 	return ok
@@ -147,7 +162,6 @@ func (intp *Interpretor) VisitBinary(bi *ast.Binary) (ret any) {
 	if intp.isLeftValue(v1) {
 		v1left, v1ok = v1.(*LeftValue)
 		v1 = intp.getVariableValue(v1left.(*LeftValue).variable.Name)
-		// fmt.Println("value of " + v1left.(*LeftValue).variable.Name + " : " + strconv.Itoa(v1.(int)))
 	}
 	if intp.isLeftValue(v2) {
 		v2left := v2.(*LeftValue)

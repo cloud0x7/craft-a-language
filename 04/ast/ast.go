@@ -7,31 +7,38 @@ import (
 
 // 语法分析器
 type AstNode interface {
+	//打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
 	Dump(prefix string)
+	//访问者模式
 	Accept(visitor IAstVisitor) any
 }
 
+// 语句
 type Statement interface {
 	AstNode
 }
+
+// 表达式
 type Expression interface {
 	AstNode
 }
 
+// 声明
 type IDecl interface {
 	AstNode
 }
 type Decl struct {
-	Name string
+	Name string // 声明都有一个符号
 }
 
 func NewDecl(name string) *Decl {
 	return &Decl{Name: name}
 }
 
+// 函数声明节点
 type FunctionDecl struct {
 	Decl
-	Body *Block
+	Body *Block // 函数体
 }
 
 func NewFunctionDecl(name string, body *Block) *FunctionDecl {
@@ -42,11 +49,12 @@ func (f *FunctionDecl) Accept(visitor IAstVisitor) any {
 }
 func (f *FunctionDecl) Dump(prefix string) {
 	fmt.Println(prefix + "FunctionDecl " + f.Name)
-	f.Body.Dump(prefix + "\t")
+	f.Body.Dump(prefix + "    ")
 }
 
+// 函数体
 type Block struct {
-	Stmts []Statement
+	Stmts []Statement // 语句列表
 }
 
 func NewBlock(stmts []Statement) *Block {
@@ -62,6 +70,7 @@ func (b Block) Dump(prefix string) {
 	}
 }
 
+// 程序节点，也是AST的根节点
 type Prog struct {
 	Block
 }
@@ -79,10 +88,11 @@ func (p *Prog) Dump(prefix string) {
 	}
 }
 
+// 变量声明节点
 type VariableDecl struct {
 	Decl
-	varType string
-	Init    Expression
+	varType string     // 变量类型
+	Init    Expression // 变量初始化所使用的表达式
 }
 
 func NewVariableDecl(name, varType string, init Expression) *VariableDecl {
@@ -104,10 +114,11 @@ func (v *VariableDecl) Dump(prefix string) {
 	}
 }
 
+// 二元表达式
 type Binary struct {
-	Op   string
-	Exp1 Expression
-	Exp2 Expression
+	Op   string     // 运算符
+	Exp1 Expression // 左边表达式
+	Exp2 Expression // 右边表达式
 }
 
 func NewBinary(op string, exp1, exp2 Expression) *Binary {
@@ -126,6 +137,7 @@ func (b *Binary) Dump(prefix string) {
 	b.Exp2.Dump(prefix + "    ")
 }
 
+// 表达式语句
 type ExpressionStatement struct {
 	Exp Expression
 }
@@ -141,10 +153,11 @@ func (e *ExpressionStatement) Dump(prefix string) {
 	e.Exp.Dump(prefix + "    ")
 }
 
+// 函数调用
 type FunctionCall struct {
-	Name       string
-	Parameters []Expression
-	Decl       *FunctionDecl
+	Name       string        // 函数名称
+	Parameters []Expression  // 参数列表
+	Decl       *FunctionDecl // 指向声明
 }
 
 func NewFunctionCall(name string, parameters []Expression) *FunctionCall {
@@ -173,7 +186,7 @@ func (f *FunctionCall) Dump(prefix string) {
 type Variable struct {
 	Expression
 	Name string
-	Decl *VariableDecl
+	Decl *VariableDecl // 指向声明
 }
 
 func NewVariable(name string) *Variable {
@@ -194,9 +207,10 @@ func (v *Variable) Dump(prefix string) {
 	fmt.Println()
 }
 
+// 字符串字面量
 type StringLiteral struct {
 	Expression
-	value string
+	value string // 保存值
 }
 
 func NewStringLiteral(value string) *StringLiteral {
@@ -209,9 +223,10 @@ func (s *StringLiteral) Dump(prefix string) {
 	fmt.Println(prefix + s.value)
 }
 
+// 整型字面量
 type IntegerLiteral struct {
 	Expression
-	value int
+	value int // 保存值
 }
 
 func NewIntegerLiteral(value int) *IntegerLiteral {
@@ -224,6 +239,7 @@ func (i *IntegerLiteral) Dump(prefix string) {
 	fmt.Println(prefix + strconv.Itoa(i.value))
 }
 
+// 实数字面量
 type DecimalLiteral struct {
 	Expression
 	value float64
@@ -239,9 +255,10 @@ func (d *DecimalLiteral) Dump(prefix string) {
 	fmt.Printf("%s %.f\n", prefix, d.value)
 }
 
+// null字面量
 type NullLiteral struct {
 	Expression
-	value interface{}
+	value any
 }
 
 func NewNullLiteral() *NullLiteral {
@@ -254,6 +271,7 @@ func (n *NullLiteral) Dump(prefix string) {
 	fmt.Println(prefix + " null")
 }
 
+// Boolean字面量
 type BooleanLiteral struct {
 	Expression
 	value bool
@@ -269,7 +287,8 @@ func (b *BooleanLiteral) Dump(prefix string) {
 	fmt.Println(prefix + strconv.FormatBool(b.value))
 }
 
-// 访问
+// //////////////////////////////////////////////////////////////////////////////
+// 访问者，定义了缺省的遍历方式
 type IAstVisitor interface {
 	Visit(node AstNode) any
 	VisitProg(prog *Prog) any
@@ -286,14 +305,20 @@ type IAstVisitor interface {
 	VisitVariable(variable *Variable) any
 	VisitFunctionCall(functionCall *FunctionCall) any
 }
+
+// 使用一个结构体模拟基类
 type AstVisitor struct {
 }
 
+// 相应的具体类，会调用visitor合适的具体方法
 func (a *AstVisitor) Visit(node AstNode) any {
 	return node.Accept(a)
 }
+
+// 访问根节点
 func (a *AstVisitor) VisitProg(prog *Prog) any {
-	var retVal interface{}
+	var retVal any
+	// 遍历并处理所有语句
 	for _, x := range prog.Stmts {
 		retVal = a.Visit(x)
 	}
@@ -307,10 +332,12 @@ func (a *AstVisitor) VisitVariableDecl(variableDecl *VariableDecl) any {
 }
 
 func (a *AstVisitor) VisitFunctionDecl(functionDecl *FunctionDecl) any {
+	// 访问并处理函数体
 	return a.VisitBlock(functionDecl.Body)
 }
 func (a *AstVisitor) VisitBlock(block *Block) any {
 	var retVal any
+	// 遍历并处理所有语句
 	for _, x := range block.Stmts {
 		retVal = a.Visit(x)
 	}
@@ -322,7 +349,7 @@ func (a *AstVisitor) VisitExpressionStatement(stmt *ExpressionStatement) any {
 func (a *AstVisitor) VisitBinary(exp *Binary) any {
 	a.Visit(exp.Exp1)
 	a.Visit(exp.Exp2)
-	return 0
+	return nil
 }
 func (a *AstVisitor) VisitIntegerLiteral(exp *IntegerLiteral) any {
 	return exp.value
