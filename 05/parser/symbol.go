@@ -19,6 +19,8 @@ func (s Symkind) ToString() string {
 	return SymkindMap[s]
 }
 
+// ///////////////////////////////////////////////////////////////////////
+// 符号表
 type ISymbolAttr interface {
 	GetKind() Symkind
 }
@@ -53,12 +55,13 @@ func NewSymbol(name string, theType IType, kind Symkind) *Symbol {
 	}
 }
 
+// 函数符号
 type FunctionSymbol struct {
 	Symbol
-	Vars        []VarSymbol // 本地变量和参数列表
-	opStackSize int
-	byteCode    []byte
-	Decl        *FunctionDecl
+	Vars        []VarSymbol   // 本地变量和参数列表
+	opStackSize int           // 操作数栈大小
+	byteCode    []byte        // 存放字节码，当前版本没用到
+	Decl        *FunctionDecl // 存放AST
 }
 
 func NewFunctionSymbol(name string, theType IType, vars []VarSymbol) *FunctionSymbol {
@@ -72,10 +75,12 @@ func (f *FunctionSymbol) Accept(visitor ISymbolVisitor, additional any) any {
 	return visitor.VisitFunctionSymbol(f, additional)
 }
 
+// 获取参数数量
 func (f *FunctionSymbol) GetNumParams() int {
 	return len(f.TheType.(*FunctionType).ParamTypes)
 }
 
+// 变量符号
 type VarSymbol struct {
 	Symbol
 }
@@ -113,12 +118,12 @@ func (s *SymbolDumper) VisitVarSymbol(sym *VarSymbol, additional any) any {
 }
 
 func (s *SymbolDumper) VisitFunctionSymbol(sym *FunctionSymbol, additional any) any {
-	// fmt.Printf("***** sym.Vars : %+v\n", sym.Vars)
 	fmt.Printf("%s%s{%s, local var count:%d}\n", additional, sym.Name, sym.kind.ToString(), len(sym.Vars))
 	return nil
 }
 
-// 系统内置符号
+// /////////////////////////////////////////////////////////////////////
+// 系统内置的符号
 var FUN_println = NewFunctionSymbol("println", NewFunctionType(Void, []IType{String}, ""), []VarSymbol{*NewVarSymbol("a", String)})
 var FUN_tick = NewFunctionSymbol("tick", NewFunctionType(Integer, []IType{}, ""), []VarSymbol{})
 var FUN_integer_to_string = NewFunctionSymbol("integer_to_string", NewFunctionType(String, []IType{Integer}, ""), []VarSymbol{*NewVarSymbol("a", Integer)})

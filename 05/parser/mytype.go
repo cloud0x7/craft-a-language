@@ -6,12 +6,17 @@ import (
 	"strings"
 )
 
+// ////////////////////////////////////
+// 类型体系
+
+// 课程源码本是一个抽象类，有属性和方法，这里使用分离的接口和结构体替代
 type IType interface {
-	LE(IType) bool
-	Accept(ITypeVisitor) any
-	hasVoid() bool
+	LE(IType) bool           // 当前类型是否小于等于type2
+	Accept(ITypeVisitor) any // 访问者模式，可用来生成字节码
+	hasVoid() bool           // 类型中是否包含void
 	ToString() string
 }
+
 type Type struct {
 	Name string
 }
@@ -32,6 +37,7 @@ func (t Type) ToString() string {
 	return t.Name
 }
 
+// 计算type1与type2的哪个范围更大
 func GetUpperBound(tp1, tp2 IType) IType {
 	if tp1 == Any || tp2 == Any {
 		return Any
@@ -45,23 +51,30 @@ func GetUpperBound(tp1, tp2 IType) IType {
 		}
 	}
 }
+
+// 判断是否为简单类型
 func IsSimpleType(tp IType) bool {
 	_, ok := tp.(*SimpleType)
 	return ok
 }
+
+// 是否为联合类型
 func IsUnionType(tp IType) bool {
 	_, ok := tp.(*UnionType)
 	return ok
 }
+
+// 是否为函数类型
 func IsFunctionType(tp IType) bool {
 	_, ok := tp.(*FunctionType)
 	return ok
 }
 
+// 简单类型
 type SimpleType struct {
 	Type
 	Name       string
-	upperTypes []IType
+	upperTypes []IType // 多个父类型
 }
 
 func NewSimpleType(name string, upperTypes []IType) *SimpleType {
@@ -74,6 +87,7 @@ func (s *SimpleType) hasVoid() bool {
 	if s.Name == "void" {
 		return true
 	}
+	// 父类型里有void，也返回true
 	for _, t := range s.upperTypes {
 		if t.hasVoid() {
 			return true
@@ -92,6 +106,7 @@ func (s *SimpleType) ToString() string {
 	return "SimpleType {name: " + s.Name + ", upperTypes: " + upperTypeNames.String() + "}"
 }
 
+// 当前类型是否小于等于type2
 func (s *SimpleType) LE(tp2 IType) bool {
 	if tp2.(*SimpleType).Name == "any" {
 		return true
@@ -132,12 +147,14 @@ func (s *SimpleType) Accept(visitor ITypeVisitor) any {
 	return visitor.visitSimpleType(s)
 }
 
+// 函数类型
 type FunctionType struct {
 	Type
 	ParamTypes []IType
-	ReturnType IType
+	ReturnType IType // 返回值类型
 }
 
+// 序号，给函数类型命名
 var FunctionTypeIndex int = 0
 
 func NewFunctionType(returnType IType, paramTypes []IType, name string) *FunctionType {
@@ -145,7 +162,7 @@ func NewFunctionType(returnType IType, paramTypes []IType, name string) *Functio
 		ParamTypes: paramTypes,
 		ReturnType: returnType,
 	}
-	if len(name) == 0 {
+	if len(name) == 0 { // 没有传名字，就用function加计数
 		f.Name = "@function" + strconv.Itoa(FunctionTypeIndex)
 		FunctionTypeIndex++
 	} else {
@@ -188,12 +205,14 @@ func (f *FunctionType) Accept(visitor ITypeVisitor) any {
 	return visitor.visitFunctionType(f)
 }
 
+// 联合类型
 type UnionType struct {
 	Type
 	Name  string
 	types []IType
 }
 
+// 序号，用于给UnionType命名
 var UnionTypeINdex int = 0
 
 func NewUnionType(types []IType, name string) *UnionType {
@@ -254,29 +273,37 @@ func (ut *UnionType) Accept(visitor ITypeVisitor) any {
 	return visitor.visitUnionType(ut)
 }
 
+// 内置类型
 type SysTypes struct {
 }
 
+// 所有类型的父类型
 var Any IType = NewSimpleType("any", []IType{})
 
+// 基础类型
 var String IType = NewSimpleType("string", []IType{Any})
 var Number IType = NewSimpleType("number", []IType{Any})
 var Boolean IType = NewSimpleType("boolean", []IType{Any})
 
+// 所有类型的子类型
 var Null IType = NewSimpleType("null", []IType{})
 var Undefined IType = NewSimpleType("undefined", []IType{})
 
+// 函数没有任何返回值的情况
 var Void IType = NewSimpleType("void", []IType{})
 
+// 两个Number的子类型
 var Integer IType = NewSimpleType("integer", []IType{Number})
 var Decimal IType = NewSimpleType("decimal", []IType{Number})
 
+// 检查是来吧为内置类型
 func IsSysType(t IType) bool {
 	return t == Any || t == String || t == Number ||
 		t == Boolean || t == Null || t == Undefined ||
 		t == Void || t == Integer || t == Decimal
 }
 
+// 类型系统的访问者接口
 type ITypeVisitor interface {
 	visit(IType) any
 	visitSimpleType(*SimpleType) any

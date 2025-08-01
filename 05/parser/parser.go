@@ -12,6 +12,8 @@ import (
 	"strconv"
 )
 
+// //////////////////////////////////////////////////////////////////////////////
+// Parser
 type Parser struct {
 	scanner  *scanner.Scanner
 	opPrec   map[myscanner.OP]int
@@ -59,12 +61,11 @@ func NewParser(scanner *scanner.Scanner) *Parser {
 		},
 	}
 }
-func (p *Parser) getPrec(op interface{}) int {
+func (p *Parser) getPrec(op any) int {
 	if _, ok := op.(scanner.OP); !ok {
 		return -1
 	}
-	ret, _ := p.opPrec[op.(scanner.OP)]
-	return ret
+	return p.opPrec[op.(scanner.OP)]
 }
 
 func (p *Parser) ParseProg() *Prog {
@@ -85,13 +86,14 @@ func (p *Parser) parseStatementList() []IStatement {
 	return stmts
 }
 
+// 增加了解析函数返回和语句块
 func (p *Parser) parseStatement() IStatement {
 	t := p.scanner.Peek()
 	if t.Code == scanner.Function {
 		return p.parseFunctionDecl()
 	} else if t.Code == scanner.Let {
 		return p.parseVariableStatement()
-	} else if t.Code == scanner.Return {
+	} else if t.Code == scanner.Return { // 解析return语句
 		return p.parseReturnStatement()
 	} else if t.Code == scanner.OpenBrace {
 		return p.parseBlock()
@@ -109,11 +111,12 @@ func (p *Parser) parseStatement() IStatement {
 	}
 }
 
+// return语句，无论是否出错都会返回一个ReturnStatement
 func (p *Parser) parseReturnStatement() *ReturnStatement {
 	beginPos := p.scanner.GetNextPos()
 	var exp IExpression
 
-	p.scanner.Next()
+	p.scanner.Next() // 跳过return
 	t := p.scanner.Peek()
 	if t.Code != scanner.SemiColon {
 		exp = p.parseExpression()
@@ -129,7 +132,7 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	return NewReturnStatement(beginPos, p.scanner.GetLastPos(), exp, false)
 }
 
-// variableStatement : 'let' variableDecl ';';
+// 解析变量声明语句，variableStatement : 'let' variableDecl ';';
 func (p *Parser) parseVariableStatement() (rt *VariableStatement) {
 	beginPos := p.scanner.GetNextPos()
 	isErrorNode := false
@@ -148,6 +151,7 @@ func (p *Parser) parseVariableStatement() (rt *VariableStatement) {
 	return NewVariableStatement(beginPos, p.scanner.GetLastPos(), variableDecl, isErrorNode)
 }
 
+// 解析变量声明
 func (p *Parser) parseVariableDecl() (rt *VariableDecl) {
 	beginPos := p.scanner.GetNextPos()
 	t := p.scanner.Next()
@@ -158,7 +162,7 @@ func (p *Parser) parseVariableDecl() (rt *VariableDecl) {
 		isErrorNode := false
 
 		t1 := p.scanner.Peek()
-		if t1.Code == scanner.Colon {
+		if t1.Code == scanner.Colon { // ':'
 			p.scanner.Next()
 			t1 = p.scanner.Peek()
 			if t1.Kind == scanner.Identifier {
@@ -172,7 +176,7 @@ func (p *Parser) parseVariableDecl() (rt *VariableDecl) {
 		}
 
 		t1 = p.scanner.Peek()
-		if t1.Code == scanner.Assign {
+		if t1.Code == scanner.Assign { //'='
 			p.scanner.Next()
 			init = p.parseExpression()
 		}
@@ -184,6 +188,7 @@ func (p *Parser) parseVariableDecl() (rt *VariableDecl) {
 	}
 }
 
+// 根据名称返回对应类型
 func (p *Parser) parseType(typeName string) IType {
 	switch typeName {
 	case "any":
@@ -206,6 +211,7 @@ func (p *Parser) parseType(typeName string) IType {
 	}
 }
 
+// 解析函数声明
 func (p *Parser) parseFunctionDecl() (rt *FunctionDecl) {
 	beginPos := p.scanner.GetNextPos()
 	isErrorNode := false
@@ -219,7 +225,7 @@ func (p *Parser) parseFunctionDecl() (rt *FunctionDecl) {
 		p.skip(nil)
 		isErrorNode = true
 	}
-
+	// 解析callSignature
 	var callSignature *CallSignature
 	t1 := p.scanner.Peek()
 	if t1.Code == scanner.OpenParen {
@@ -243,19 +249,20 @@ func (p *Parser) parseFunctionDecl() (rt *FunctionDecl) {
 	return NewFunctionDecl(beginPos, t.Text, callSignature, functionBody, isErrorNode)
 }
 
+// 解析函数签名
 func (p *Parser) parseCallSignature() (rt *CallSignature) {
 	beginPos := p.scanner.GetLastPos()
-	t := p.scanner.Next()
+	p.scanner.Next() // 跳过'('
 
 	var paramList *ParameterList
 	if p.scanner.Peek().Code != myscanner.CloseParen {
 		paramList = p.parseParameterList()
 	}
 
-	t = p.scanner.Peek()
+	t := p.scanner.Peek()
 	if t.Code == scanner.CloseParen {
 		p.scanner.Next()
-
+		// 解析类型注释
 		theType := "any"
 		if p.scanner.Peek().Code == scanner.Colon {
 			theType = p.parseTypeAnnotation()
@@ -267,6 +274,7 @@ func (p *Parser) parseCallSignature() (rt *CallSignature) {
 	}
 }
 
+// 解析参数列表
 func (p *Parser) parseParameterList() *ParameterList {
 	var params []*VariableDecl
 	beginPos := p.scanner.GetNextPos()
@@ -317,6 +325,7 @@ func (p *Parser) parseParameterList() *ParameterList {
 	return NewParameterList(beginPos, p.scanner.GetLastPos(), params, isErrorNode)
 }
 
+// 解析类型注解，默认返回'any'
 func (p *Parser) parseTypeAnnotation() string {
 	theType := "any"
 	p.scanner.Next()
@@ -332,15 +341,14 @@ func (p *Parser) parseTypeAnnotation() string {
 	return theType
 }
 
-// 解析函数体
+// 解析函数体，block : '{' statementList? '}' ;
 // parseFunctionBody取消用这个代替
 func (p *Parser) parseBlock() (rt *Block) {
 	beginPos := p.scanner.GetNextPos()
-	t := p.scanner.Peek()
 
 	p.scanner.Next()
 	stmts := p.parseStatementList()
-	t = p.scanner.Peek()
+	t := p.scanner.Peek()
 	if t.Code == scanner.CloseBrace {
 		p.scanner.Next()
 		return NewBlock(beginPos, p.scanner.GetLastPos(), stmts, false)
@@ -375,6 +383,7 @@ func (p *Parser) parseExpression() (rt IExpression) {
 	return p.parseAssignment()
 }
 
+// 解析赋值表达式
 func (p *Parser) parseAssignment() (rt IExpression) {
 	assignPrec := p.getPrec(scanner.Assign)
 
@@ -529,6 +538,7 @@ func (p *Parser) addWarning(msg string, pos *scanner.Position) {
 	fmt.Println("@" + pos.ToString() + " : " + msg)
 }
 
+// 跳过一些Token，用于错误恢复，以便继续解析后面Token
 func (p *Parser) skip(seperators []string) {
 	t := p.scanner.Peek()
 	for t.Kind != scanner.EOF {

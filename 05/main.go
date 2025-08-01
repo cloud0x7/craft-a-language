@@ -43,6 +43,7 @@ func main() {
 	astDumper := parser.NewAstDumper()
 	astDumper.Visit(prog, "")
 
+	// 语义分析
 	semanticAnalyer := parser.NewSemanticAnalyer()
 	semanticAnalyer.Execute(prog)
 
@@ -61,10 +62,12 @@ func main() {
 	fmt.Printf("程序返回值:%d\n", retVal)
 }
 
+// ///////////////////////////////////////////////////////////////////////
+// 解释器
 type Interpretor struct {
 	parser.AstVisitor
-	callStack    []*StackFrame
-	currentFrame *StackFrame
+	callStack    []*StackFrame // 调用栈
+	currentFrame *StackFrame   // 当前栈帧
 }
 
 func NewIntepretor() *Interpretor {
@@ -81,10 +84,14 @@ func NewIntepretor() *Interpretor {
 
 	return r
 }
+
+// 压入栈帧
 func (i *Interpretor) pushFrame(frame *StackFrame) {
 	i.callStack = append(i.callStack, frame)
 	i.currentFrame = frame
 }
+
+// 弹出栈帧
 func (i *Interpretor) popFrame() {
 	if len(i.callStack) > 1 {
 		frame := i.callStack[len(i.callStack)-2]
@@ -100,6 +107,7 @@ func (i *Interpretor) VisitBlock(block *parser.Block, additional any) any {
 	var retVal any
 	for _, x := range block.Stmts {
 		retVal = i.Visit(x, additional)
+		// 如果遇到返回语句，直接返回不再执行后续代码
 		if isReturnValue(retVal) {
 			return retVal
 		}
@@ -107,6 +115,7 @@ func (i *Interpretor) VisitBlock(block *parser.Block, additional any) any {
 	return retVal
 }
 
+// 处理Return语句，封装成一个特殊的对象，用于中断后续执行
 func (i *Interpretor) VisitReturnStatement(stmt *parser.ReturnStatement, additional any) any {
 	var retVal any
 	if stmt.Exp != nil {
@@ -116,6 +125,7 @@ func (i *Interpretor) VisitReturnStatement(stmt *parser.ReturnStatement, additio
 	return NewReturnValue(retVal)
 }
 
+// 把返回值设置到上一级栈桢中（也就是调用者的栈桢）
 func (i *Interpretor) setReturnValue(retVal any) {
 	frame := i.callStack[len(i.callStack)-2]
 	frame.retVal = retVal
@@ -128,6 +138,8 @@ func (i *Interpretor) VisitIfStatement(ifStmt *parser.IfStatement, additional an
 func (i *Interpretor) VisitForStatement(forStmt *parser.ForStatement, additional any) any {
 	return nil
 }
+
+// 运行函数调用
 func (i *Interpretor) VisitFunctionCall(functionCall *parser.FunctionCall, additional any) any {
 	if functionCall.Name == "println" {
 		return i.println(functionCall.Arguments)
@@ -138,9 +150,11 @@ func (i *Interpretor) VisitFunctionCall(functionCall *parser.FunctionCall, addit
 	}
 
 	if functionCall.Sym != nil {
+		// 清空返回值
 		i.currentFrame.retVal = nil
-
+		// 创建新栈桢
 		frame := NewStackFrame()
+		// 计算参数值，并保存到新创建的栈桢
 		functionDecl := functionCall.Sym.Decl
 		if functionDecl.CallSignature.ParamList.Params != nil {
 			params := functionDecl.CallSignature.ParamList.Params
@@ -150,19 +164,18 @@ func (i *Interpretor) VisitFunctionCall(functionCall *parser.FunctionCall, addit
 				frame.values[variableDecl.Sym] = val
 			}
 		}
-
+		// 新栈帧入栈
 		i.pushFrame(frame)
 		i.Visit(functionDecl.Body, additional)
-		i.popFrame()
-
-		return i.currentFrame.retVal
+		i.popFrame()                 // 弹出当前栈帧
+		return i.currentFrame.retVal // 返回值
 	} else {
 		panic("Runtime error, cannot find declaration of " + functionCall.Name + ".")
 	}
 }
 
+// 内置函数println
 func (i *Interpretor) println(args []parser.IExpression) any {
-
 	if len(args) > 0 {
 		retVal := i.Visit(args[0], nil)
 		fmt.Println(retVal)
@@ -189,6 +202,7 @@ func (i *Interpretor) integer_to_string(args []parser.IExpression) string {
 	return ""
 }
 
+// 变量声明，如果存在变量初始化部分，要存下变量值
 func (i *Interpretor) VisitVariableDecl(variableDecl *parser.VariableDecl, additional any) any {
 	if variableDecl.Init != nil {
 		v := i.Visit(variableDecl.Init, nil)
@@ -198,11 +212,11 @@ func (i *Interpretor) VisitVariableDecl(variableDecl *parser.VariableDecl, addit
 	return nil
 }
 
+// 获取变量的值，左值返回符号；否则返回值
 func (i *Interpretor) VisitVariable(variable *parser.Variable, additional any) any {
 	if variable.IsLeftValue() {
 		return variable.Sym
 	} else {
-		// fmt.Printf("3333 %+v\n", i.getVariableValue(variable.Sym))
 		return i.getVariableValue(variable.Sym)
 	}
 }
@@ -277,10 +291,10 @@ func (i *Interpretor) VisitUnary(exp *parser.Unary, additional any) any {
 	return ret
 }
 
-// 栈帧
+// 栈帧，每个函数对应一级栈帧
 type StackFrame struct {
-	values map[any]any
-	retVal any
+	values map[any]any // 存储变量的值
+	retVal any         // 返回值
 }
 
 func NewStackFrame() *StackFrame {
@@ -289,6 +303,7 @@ func NewStackFrame() *StackFrame {
 	}
 }
 
+// 封装的Return语句
 type ReturnValue struct {
 	tag_ReturnValue int
 	value           any

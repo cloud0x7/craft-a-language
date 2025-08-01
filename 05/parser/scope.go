@@ -2,9 +2,10 @@ package parser
 
 import "fmt"
 
+// 作用域，用来限定标识符的可见性
 type Scope struct {
-	Name2sym       map[string]ISymbol
-	enclosingScope *Scope
+	Name2sym       map[string]ISymbol // 存储符号，以名称为key
+	enclosingScope *Scope             // 父作用域
 }
 
 func NewScope(enclosingScope *Scope) *Scope {
@@ -15,20 +16,26 @@ func NewScope(enclosingScope *Scope) *Scope {
 	return r
 }
 
+// 把符号记入符号表（作用域）
 func (s *Scope) Enter(name string, sym ISymbol) {
 	s.Name2sym[name] = sym
 }
 
+// 查询是否有某名称的符号
 func (s *Scope) HasSymbol(name string) bool {
 	_, ok := s.Name2sym[name]
 	return ok
 }
+
+// 根据名称查找符号
 func (s *Scope) GetSymbol(name string) ISymbol {
 	if s.HasSymbol(name) {
 		return s.Name2sym[name]
 	}
 	return nil
 }
+
+// 级联查找某个符号，本作用域查询不到，则去上一级作用域查
 func (s *Scope) GetSymbolCascade(name string) ISymbol {
 	sym := s.GetSymbol(name)
 	if sym != nil {
@@ -40,6 +47,7 @@ func (s *Scope) GetSymbolCascade(name string) ISymbol {
 	}
 }
 
+// 打印Scope信息
 type ScopeDumper struct {
 	AstVisitor
 }
@@ -50,18 +58,15 @@ func NewScopeDumper() *ScopeDumper {
 	return r
 }
 
-// func (s *ScopeDumper) Visit(node IAstNode, additional any) any {
-// 	return node.Accept(s, additional)
-// }
-
+// 访问函数声明节点
 func (s *ScopeDumper) VisitFunctionDecl(functionDecl *FunctionDecl, additional any) any {
 	fmt.Printf("%sScope of function: %s\n", additional, functionDecl.Name)
-	if functionDecl.scope != nil {
+	if functionDecl.scope != nil { // 显示本级作用域
 		s.dumpScope(functionDecl.scope, additional)
 	} else {
 		fmt.Printf("%s{null}\n", additional)
 	}
-
+	// 继续遍历
 	return s.AstVisitor.VisitFunctionDecl(functionDecl, additional.(string)+"   ")
 }
 

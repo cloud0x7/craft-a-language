@@ -7,9 +7,10 @@ import (
 	"fmt"
 )
 
+// 移除了Dump()方法，打印对象内容的任务交给独立的访问者
 type IAstNode interface {
 	Accept(visitor IAstVisitor, additional any) any
-	GetPosition() *scanner.Position
+	GetPosition() *scanner.Position // 临时添加的，方便获取属性
 }
 
 type IAstVisitor interface {
@@ -49,14 +50,15 @@ type AstNode struct {
 	isErrorNode bool
 }
 
-func (a AstNode) GetPosition() *scanner.Position {
-	return a.beginPos
-}
 func NewAstNode(beginPos, endPos *scanner.Position, isErrorNode bool) *AstNode {
 	return &AstNode{beginPos: beginPos, endPos: endPos, isErrorNode: isErrorNode}
 }
 func (a AstNode) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.Visit(a, additional)
+}
+
+func (a AstNode) GetPosition() *scanner.Position {
+	return a.beginPos
 }
 
 // 语句
@@ -80,12 +82,14 @@ func NewDecl(beginPos, endPos *scanner.Position, isErrorNode bool, name string) 
 	return &Decl{AstNode: NewAstNode(beginPos, endPos, isErrorNode), Name: name}
 }
 
+// ///////////////////////////////////////////////////////////
+// 语句
 // 函数声明节点
 type FunctionDecl struct {
 	Decl
-	CallSignature *CallSignature
-	Body          *Block
-	scope         *Scope
+	CallSignature *CallSignature // 函数签名
+	Body          *Block         // 函数体
+	scope         *Scope         // 函数对应的作用域
 	Sym           *FunctionSymbol
 }
 
@@ -96,10 +100,11 @@ func (f *FunctionDecl) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitFunctionDecl(f, additional)
 }
 
+// 函数签名
 type CallSignature struct {
 	AstNode
-	ParamList *ParameterList
-	TheType   IType
+	ParamList *ParameterList // 参数列表
+	TheType   IType          // 返回值类型
 }
 
 func NewCallSignature(beginPos, endPos *scanner.Position, paramList *ParameterList, theType IType, isErrorNode bool) *CallSignature {
@@ -109,9 +114,10 @@ func (c *CallSignature) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitCallSignature(c, additional)
 }
 
+// 参数列表
 type ParameterList struct {
 	AstNode
-	Params []*VariableDecl
+	Params []*VariableDecl // 把参数当作变量声明
 }
 
 func NewParameterList(beginPos, endPos *scanner.Position, params []*VariableDecl, isErrorNode bool) *ParameterList {
@@ -121,6 +127,7 @@ func (p *ParameterList) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitParameterList(p, additional)
 }
 
+// 函数体
 type Block struct {
 	*AstNode
 	Stmts []IStatement
@@ -134,7 +141,7 @@ func (b *Block) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitBlock(b, additional)
 }
 
-// 程序，AST的根节点
+// 程序，AST的根节点，也可以当作一个函数
 type Prog struct {
 	*Block
 	Sym *FunctionSymbol
@@ -147,24 +154,29 @@ func (p *Prog) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitProg(p, additional)
 }
 
+// 临时添加的接口，方便获取属性
 type IExpressionAttr interface {
 	GetTheType() IType
 	IsLeftValue() bool
 }
 
+// ///////////////////////////////////////////////////////////
 // 表达式
+// 表达式语句
 type IExpression interface {
 	IAstNode
 	IExpressionAttr
 }
+
+// 表达式语句
 type Expression struct {
 	*AstNode
 	TheType           IType
-	shouldBeLeftValue bool
-	isLeftValue       bool
-	constValue        any
+	shouldBeLeftValue bool // 需要一个左值
+	isLeftValue       bool // 是否是一个左值
+	constValue        any  // 表达式的常量值，用在常量折叠、流程分析时
 
-	inferredType IType
+	inferredType IType // 推断类型，一般是TheType的子类型
 }
 
 func NewExpression(beginPos, endPos *scanner.Position, isErrorNode bool) *Expression {
@@ -213,11 +225,12 @@ func getEndPosition(exp IExpression) *scanner.Position {
 	}
 }
 
+// 二元表达式
 type Binary struct {
 	Expression
-	Op   scanner.OP
-	Exp1 IExpression
-	Exp2 IExpression
+	Op   scanner.OP  // 运算符
+	Exp1 IExpression // 左边表达式
+	Exp2 IExpression // 右边表达式
 }
 
 func NewBinary(op scanner.OP, exp1, exp2 IExpression, isErrorNode bool) *Binary {
@@ -232,11 +245,12 @@ func (b *Binary) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitBinary(b, additional)
 }
 
+// 一元表达式
 type Unary struct {
 	Expression
 	Op       scanner.OP
 	Exp      IExpression
-	isPrefix bool
+	isPrefix bool // 前缀还是后缀
 }
 
 func NewUnary(beginPos, endPos *scanner.Position, op scanner.OP, exp IExpression, isPrefix, isErrorNode bool) *Unary {
@@ -247,6 +261,7 @@ func (u *Unary) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitUnary(u, additional)
 }
 
+// 表达式语句，表达式后面加分号
 type ExpressionStatement struct {
 	*AstNode
 	exp IExpression
@@ -260,6 +275,7 @@ func (e *ExpressionStatement) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitExpressionStatement(e, additional)
 }
 
+// 返回语句
 type ReturnStatement struct {
 	*AstNode
 	Exp IExpression
@@ -272,11 +288,12 @@ func (e *ReturnStatement) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitReturnStatement(e, additional)
 }
 
+// if语句
 type IfStatement struct {
 	*AstNode
-	condition IExpression
-	stmt      IStatement
-	elseStmt  IStatement
+	condition IExpression // 条件
+	stmt      IStatement  // if语句块
+	elseStmt  IStatement  // else语句块
 }
 
 func NewIfStatement(beginPos, endPos *scanner.Position, condition IExpression, stmt IStatement, elseStmt IStatement, isErrorNode bool) *IfStatement {
@@ -288,9 +305,9 @@ func (i *IfStatement) Accept(visitor AstVisitor, additional any) any {
 
 type ForStatement struct {
 	*AstNode
-	init      IExpression
-	condition IExpression
-	increment IExpression
+	init      IExpression // 初始条件
+	condition IExpression // 循环条件
+	increment IExpression // 自增
 	stmt      IStatement
 }
 
@@ -343,12 +360,13 @@ func (v *VariableStatement) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitVariableStatement(v, additional)
 }
 
+// 变量声明节点
 type VariableDecl struct {
 	Decl
-	TheType      IType
-	Init         IExpression
+	TheType      IType       // 变量类型
+	Init         IExpression // 初始化表达式
 	Sym          *VarSymbol
-	inferredType IType
+	inferredType IType // 推断类型
 }
 
 func NewVariableDecl(beginPos, endPos *scanner.Position, name string, theType IType, init IExpression, isErrorNode bool) *VariableDecl {
@@ -372,6 +390,7 @@ func (v *Variable) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitVariable(v, additional)
 }
 
+// 字符串字面量
 type StringLiteral struct {
 	*AstNode
 	Expression
@@ -385,6 +404,7 @@ func (s *StringLiteral) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitStringLiteral(s, additional)
 }
 
+// 整型字面量
 type IntegerLiteral struct {
 	Expression
 	value int
@@ -404,6 +424,7 @@ func (i *IntegerLiteral) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitIntegerLiteral(i, additional)
 }
 
+// 实数字面量
 type DecimalLiteral struct {
 	*AstNode
 	Expression
@@ -417,6 +438,7 @@ func (d *DecimalLiteral) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitDecimalLiteral(d, additional)
 }
 
+// null字面量
 type NullLiteral struct {
 	*AstNode
 	Expression
@@ -431,6 +453,7 @@ func (n *NullLiteral) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitNullLiteral(n, additional)
 }
 
+// Boolean字面量
 type BooleanLiteral struct {
 	*AstNode
 	Expression
@@ -444,6 +467,7 @@ func (b *BooleanLiteral) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitBooleanLiteral(b, additional)
 }
 
+// 错误表达式
 type ErrorExp struct {
 	Expression
 }
@@ -455,6 +479,7 @@ func (e *ErrorExp) Accept(visitor IAstVisitor, additional any) any {
 	return visitor.VisitErrorExp(e, additional)
 }
 
+// 错误语句
 type ErrorStmt struct {
 	*AstNode
 }
@@ -469,8 +494,9 @@ func (e *ErrorStmt) Accept(visitor IAstVisitor, additional any) any {
 //////////////////////////
 // Visitor
 
+// 这是一个基类，定义了缺省的遍历方式。子类可以覆盖某些方法，修改遍历方式
 type AstVisitor struct {
-	Curr IAstVisitor
+	Curr IAstVisitor // 这里保存一下当前子类，方便选择调用哪个类的方法
 }
 
 func (a *AstVisitor) Visit(node IAstNode, additional any) any {
@@ -584,6 +610,7 @@ func (a *AstVisitor) VisitErrorStmt(exp *ErrorStmt, additional any) any {
 	return nil
 }
 
+// 打印AST的调试信息，主要打印一些属性、类型信息、是否有错误记录、是否引用消解等
 type AstDumper struct {
 	AstVisitor
 }
@@ -601,7 +628,7 @@ func (a *AstDumper) VisitProg(prog *Prog, prefix any) any {
 	}
 	fmt.Println()
 	for _, x := range prog.Stmts {
-		a.AstVisitor.Visit(x, fmt.Sprintf("%s    ", prefix))
+		a.Visit(x, fmt.Sprintf("%s    ", prefix))
 	}
 	return nil
 }
@@ -839,5 +866,6 @@ func (a *AstDumper) VisitForStatement(stmt *ForStatement, additional any) any {
 }
 
 func init() {
+	// 检查一下作为基类，是否实现了所有需要的接口
 	var _ IAstVisitor = (*AstVisitor)(nil)
 }

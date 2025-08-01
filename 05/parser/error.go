@@ -4,10 +4,11 @@ import (
 	"craft-language/scanner"
 )
 
+// 标记编译错误的类
 type CompilerError struct {
 	Msg       string
-	IsWarning bool
-	BeginPos  *scanner.Position
+	IsWarning bool              // 是告警还是错误
+	BeginPos  *scanner.Position // token位置
 }
 
 func NewCompilerError(msg string, beginPos *scanner.Position, isWarning bool) *CompilerError {
