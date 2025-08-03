@@ -63,16 +63,17 @@ func main() {
 	// fmt.Printf("intp %T, %+v\n", intp, intp)
 	fmt.Printf("程序返回值:%v\n", retVal)
 
+	// ！！新增内容
 	fmt.Println("编译成字节码：")
-	generator := vm.NewBCGenerator()
-	// fmt.Println(generator)
-	bcModule := generator.Visit(prog, "").(vm.BCModule)
+	generator := vm.NewBCGenerator()                    // 字节码生成器
+	bcModule := generator.Visit(prog, "").(vm.BCModule) // 字节码模块
 	fmt.Println(bcModule)
-	bcModuleDumper := vm.BCModuleDumper{}
+	// 打印字节码模块信息
+	bcModuleDumper := new(vm.BCModuleDumper)
 	bcModuleDumper.Dump(&bcModule)
 
 	fmt.Println("使用栈机运行程序:")
-	retVal = vm.NewVM().Execute(&bcModule)
+	retVal = vm.NewVM().Execute(&bcModule) // 运行字节码模块
 	fmt.Println("程序返回值:")
 	fmt.Println(retVal)
 
@@ -103,6 +104,7 @@ func main() {
 
 }
 
+// 把字节码写入文件
 func writeByteCode(bcFilaName string, bc []int) {
 	f, err := os.Create(bcFilaName + ".bc")
 	if err != nil {
@@ -110,17 +112,15 @@ func writeByteCode(bcFilaName string, bc []int) {
 	}
 	defer f.Close()
 
-	// fmt.Printf("@@@@@@@@@@@:")
 	for _, v := range bc {
-		// fmt.Printf("%d ", int32(v))
 		err := binary.Write(f, binary.LittleEndian, int32(v))
 		if err != nil {
 			fmt.Println("binary.Write failed:", err)
 		}
 	}
-	// fmt.Println()
 }
 
+// 从文件中读取字节码
 func readByteCode(fileName string) []int {
 	f, err := os.Open(fileName + ".bc")
 	if err != nil {
@@ -130,16 +130,13 @@ func readByteCode(fileName string) []int {
 
 	var bc []int
 	var num int32
-	// fmt.Printf("@@@@@@@@@@@:")
 	for {
 		err := binary.Read(f, binary.LittleEndian, &num)
-		// fmt.Printf("%d ", num)
 		if err != nil {
 			break
 		}
 		bc = append(bc, int(num))
 	}
-	// fmt.Println()
 	return bc
 }
 

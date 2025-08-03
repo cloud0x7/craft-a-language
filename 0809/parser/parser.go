@@ -1,10 +1,6 @@
 package parser
 
 import (
-	// "craft-language/compiler"
-
-	// "craft-language/mytype"
-
 	"craft-language/scanner"
 	myscanner "craft-language/scanner"
 	"fmt"

@@ -138,11 +138,6 @@ var Built_ins = map[string]*FunctionSymbol{
 	"tick":              FUN_tick,
 	"integer_to_string": FUN_integer_to_string,
 }
-var Built_ins_list = []*FunctionSymbol{
-	FUN_println,
-	FUN_tick,
-	FUN_integer_to_string,
-}
 
 var FUN_string_create_by_str = NewFunctionSymbol("string_create_by_str", NewFunctionType(String, []IType{String}, ""), []*VarSymbol{NewVarSymbol("a", String)})
 var FUN_string_concat = NewFunctionSymbol("string_concat", NewFunctionType(String, []IType{String, String}, ""), []*VarSymbol{NewVarSymbol("str1", String), NewVarSymbol("str2", String)})
